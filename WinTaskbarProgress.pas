@@ -5,6 +5,19 @@
   file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 -------------------------------------------------------------------------------}
+{===============================================================================
+
+  WinTaskbarProgress
+
+    Provides a small set of functions for setting-up the progress state and
+    value in taskbar icon (supported from Windows 7 up).
+    It also provides some of the interfaces for accessing the taskbar.
+
+  ©František Milt 2018-04-20
+
+  Version 1.0
+
+===============================================================================}
 unit WinTaskbarProgress;
 
 {$IF not(defined(MSWINDOWS) or defined(WINDOWS))}
