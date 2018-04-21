@@ -275,6 +275,6 @@ initialization
   Initialize;
 
 finalization
-  finalize;
+  Finalize;
 
 end.
