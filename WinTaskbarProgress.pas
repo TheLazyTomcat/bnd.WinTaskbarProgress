@@ -36,7 +36,7 @@ unit WinTaskbarProgress;
 interface
 
 uses
-  Windows, AuxTypes;
+  Windows {$IFNDEF FPC}, AuxTypes{$ENDIF};
 
 
 type
