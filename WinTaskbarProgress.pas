@@ -214,7 +214,7 @@ If TaskbarProgressActive then
       ProgressState := TBPF_NOPROGRESS;
     end;
   {$IFDEF FPC}
-    {$PUSH}{$WARN SYMBOL_PLATFORM	 OFF} // for AppHandle
+    {$PUSH}{$WARN SYMBOL_PLATFORM OFF} // for AppHandle
     Result := Succeeded(TaskbarList.SetProgressState(WidgetSet.AppHandle,ProgressState));
     {$POP}
   {$ELSE}
@@ -230,7 +230,7 @@ Function SetTaskbarProgressValue(Completed, Total: UInt64): Boolean;
 begin
 If TaskbarProgressActive then
 {$IFDEF FPC}
-  {$PUSH}{$WARN SYMBOL_PLATFORM	OFF}  // for AppHandle
+  {$PUSH}{$WARN SYMBOL_PLATFORM OFF}  // for AppHandle
   Result := Succeeded(TaskbarList.SetProgressValue(WidgetSet.AppHandle,Completed,Total))
   {$POP}
 {$ELSE}
