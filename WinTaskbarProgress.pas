@@ -10,24 +10,33 @@
   WinTaskbarProgress
 
     Provides a small set of functions for setting-up the progress state and
-    value in taskbar icon (supported from Windows 7 up).
+    progress value in taskbar icon (supported from Windows 7 up).
     It also provides some of the interfaces for accessing the taskbar.
 
-  ©František Milt 2018-04-20
+  Version 1.1 (2019-10-04)
 
-  Version 1.0
-  
+  Last change 2019-10-04
+
+  ©2018-2019 František Milt
+
   Contacts:
     František Milt: frantisek.milt@gmail.com
 
   Support:
-    If you find this code useful, please consider supporting the author by
-    making a small donation using following link(s):
+    If you find this code useful, please consider supporting its author(s) by
+    making a small donation using the following link(s):
 
       https://www.paypal.me/FMilt
 
+  Changelog:
+    For detailed changelog and history please refer to this git repository:
+
+      github.com/TheLazyTomcat/Bnd.WinTaskbarProgress
+
   Dependencies:
-    AuxTypes - github.com/ncs-sniper/Lib.AuxTypes
+  * AuxTypes - github.com/TheLazyTomcat/Lib.AuxTypes
+
+    AuxTypes is only required when compiled in Delphi.
 
 ===============================================================================}
 unit WinTaskbarProgress;
@@ -40,13 +49,25 @@ unit WinTaskbarProgress;
   {$MODE ObjFPC}{$H+}
 {$ENDIF}
 
+{
+  ImplicitTaskbarProgress
+
+  When symbol ImplicitTaskbarProgress is defined, this unit creates implicit
+  taskbar progress manager object and provides some standalone functions that
+  are using it.
+  It is here mainly for situations, whete the standalone manager is not desired,
+  so it can be disabled.
+
+  Defined by default.
+}
+{$DEFINE ImplicitTaskbarProgress}
+
 {$MINENUMSIZE 4}
 
 interface
 
 uses
-  Windows {$IFNDEF FPC}, AuxTypes{$ENDIF};
-
+  Windows{$IFNDEF FPC}, AuxTypes{$ENDIF};
 
 type
   // some basic types used in interfaces
@@ -178,11 +199,63 @@ const
 
   CLSID_TaskbarList: TGUID = '{56FDF344-FD6D-11d0-958A-006097C9A090}';
 
-//==============================================================================
-//- Pascal implementation ------------------------------------------------------
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Pascal implementation
+--------------------------------------------------------------------------------
+===============================================================================}
 
 type
   TTaskbarProgressState = (tpsNoProgress, tpsIndeterminate, tpsNormal, tpsError, tpsPaused);
+
+{===============================================================================
+    TTaskBarProgress - class declaration
+===============================================================================}
+
+type
+  TTaskBarProgress = class(TObject)
+  private
+    fWindowHandle:    HWND;
+    fHandleObtained:  Boolean;
+    fTaskbarList:     ITaskbarList4;
+    fStateLastResult: HResult;
+    fValueLastResult: HResult;
+    fProgressState:   TTaskbarProgressState;
+    fProgressMax:     UInt64;
+    fProgressValue:   UInt64;
+    fProgressCoef:    UInt64;
+    fProgress:        Double;
+    Function GetActive: Boolean;
+    procedure SetProgressState(Value: TTaskbarProgressState);
+    procedure SetProgressMax(Value: UInt64);
+    procedure SetProgressValue(Value: UInt64);
+    procedure SetProgressCoef(Value: UInt64);
+    procedure SetProgress(Value: Double);
+  protected
+    class Function GetWindowHandle: HWND; virtual;
+    procedure ObtainWindowHandle; virtual;
+    procedure Initialize; virtual;
+    procedure Finalize; virtual;
+    procedure UpdateProgress; virtual;
+  public
+    constructor Create(WindowHandle: HWND = 0);
+    destructor Destroy; override;
+    procedure ReinitHandle(WindowHandle: HWND = 0); virtual;
+    property WindowHandle: HWND read fWindowHandle;
+    property Active: Boolean read GetActive;
+    property StateLastResult: HResult read fStateLastResult;
+    property ValueLastResult: HResult read fValueLastResult;
+    property ProgressState: TTaskbarProgressState read fProgressState write SetProgressState;
+    property ProgressMaxValue: UInt64 read fProgressMax write SetProgressMax;
+    property ProgressValue: UInt64 read fProgressValue write SetProgressValue;
+    property ProgressCoefficient: UInt64 read fProgressCoef write SetProgressCoef;
+    property Progress: Double read fProgress write SetProgress;
+  end;
+
+{$IFDEF ImplicitTaskbarProgress}
+{===============================================================================
+    Standalone functions
+===============================================================================}
 
 Function TaskbarProgressActive: Boolean;
 
@@ -190,45 +263,242 @@ Function SetTaskbarProgressState(State: TTaskbarProgressState): Boolean;
 Function SetTaskbarProgressValue(Completed, Total: UInt64): Boolean; overload;
 Function SetTaskbarProgressValue(Value: Double; IntCoef: UInt64 = 1000): Boolean; overload;
 
+{$ENDIF}
+
 implementation
 
 uses
-  ActiveX,{$IFDEF FPC} InterfaceBase{$ELSE} Forms{$ENDIF};
+  SysUtils, ActiveX,{$IFDEF FPC} InterfaceBase{$ELSE} Forms{$ENDIF};
+
+{===============================================================================
+    TTaskBarProgress - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TTaskBarProgress - private functions
+-------------------------------------------------------------------------------}
+
+Function TTaskBarProgress.GetActive: Boolean;
+begin
+Result := Assigned(fTaskbarList);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.SetProgressState(Value: TTaskbarProgressState);
+begin
+fProgressState := Value;
+UpdateProgress;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.SetProgressMax(Value: UInt64);
+begin
+fProgressMax := Value;
+If fProgressValue > fProgressMax then
+  fProgressValue := fProgressMax;
+fProgressCoef := fProgressMax;
+If fProgressMax > 0 then
+  fProgress := fProgressValue / fProgressMax
+else
+  fProgress := 0.0;
+UpdateProgress;
+end;
+ 
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.SetProgressValue(Value: UInt64);
+begin
+If Value <= fProgressMax then
+  fProgressValue := Value
+else
+  fProgressValue := fProgressMax;
+If fProgressMax > 0 then
+  fProgress := fProgressValue / fProgressMax
+else
+  fProgress := 0.0;
+UpdateProgress;
+end;
+ 
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.SetProgressCoef(Value: UInt64);
+begin
+fProgressCoef := Value;
+fProgressMax := fProgressCoef;
+fProgressValue := Round(fProgress * fProgressCoef);
+UpdateProgress;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.SetProgress(Value: Double);
+begin
+If Value < 0.0 then
+  fProgress := 0.0
+else If Value > 1.0 then
+  fProgress := 1.0
+else
+  fProgress := Value;
+fProgressMax := fProgressCoef;
+fProgressValue := Round(fProgressCoef * fProgress);
+UpdateProgress;
+end;
+
+{-------------------------------------------------------------------------------
+    TTaskBarProgress - protected functions
+-------------------------------------------------------------------------------}
+
+class Function TTaskBarProgress.GetWindowHandle: HWND;
+{$IFNDEF FPC}
+var
+  WindowInfo: TWindowInfo;
+{$ENDIF}  
+begin
+{$IFDEF FPC}
+{$PUSH}{$WARN SYMBOL_PLATFORM OFF} // for AppHandle
+Result := WidgetSet.AppHandle;
+{$POP}
+{$ELSE}
+Result := Application.Handle;
+If Assigned(Application.MainForm) then
+  If GetWindowInfo(Application.MainForm.Handle,WindowInfo) then
+    If WindowInfo.dwExStyle and WS_EX_APPWINDOW <> 0 then
+      Result := Application.MainForm.Handle;
+{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.ObtainWindowHandle;
+begin
+If not fHandleObtained then
+  begin
+    If not IsWindow(fWindowHandle) then
+      fWindowHandle := GetWindowHandle;
+    fHandleObtained := True;  
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.Initialize;
+begin
+{
+  obtaining of true fWindowHandle is deffered to first call of
+  UpdateProgress method - it is done because implicit manager is created before
+  the windows, so it cannot get it at that point
+}
+fHandleObtained := False;
+If Succeeded(CoInitialize(nil)) then
+  begin
+    If Succeeded(CoCreateInstance(CLSID_TaskbarList,nil,CLSCTX_INPROC_SERVER,IID_ITaskbarList4,fTaskbarList)) then
+      begin
+        If fTaskbarList.HrInit <> S_OK then
+          begin
+            fTaskbarList := nil;  // fTaskbarList.Relase
+            CoUninitialize;
+          end;
+      end
+    else CoUninitialize;
+  end;
+fStateLastResult := S_OK;
+fValueLastResult := S_OK;
+fProgressState := tpsNoProgress;
+fProgressMax := 100;
+fProgressValue := 0;
+fProgressCoef := 100;
+fProgress := 0.0;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.Finalize;
+begin
+If Assigned(fTaskbarList) then
+  begin
+    fTaskbarList := nil;  // TaskbarList.Relase
+    CoUninitialize;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.UpdateProgress;
+var
+  SysProgressState: TBPFLAG;
+begin
+ObtainWindowHandle;
+If Assigned(fTaskbarList) then
+  begin
+    If fProgressState <> tpsIndeterminate then
+      fValueLastResult := fTaskbarList.SetProgressValue(fWindowHandle,fProgressValue,fProgressMax);
+    case fProgressState of
+      tpsIndeterminate: SysProgressState := TBPF_INDETERMINATE;
+      tpsNormal:        SysProgressState := TBPF_NORMAL;
+      tpsError:         SysProgressState := TBPF_ERROR;
+      tpsPaused:        SysProgressState := TBPF_PAUSED;
+    else
+     {tpsNoProgress}
+      SysProgressState := TBPF_NOPROGRESS;
+    end;
+    fStateLastResult := fTaskbarList.SetProgressState(fWindowHandle,SysProgressState);
+  end;
+end;
+
+{-------------------------------------------------------------------------------
+    TTaskBarProgress - public functions
+-------------------------------------------------------------------------------}
+
+constructor TTaskBarProgress.Create(WindowHandle: HWND = 0);
+begin
+inherited Create;
+fWindowHandle := WindowHandle;
+Initialize;
+end;
+
+//------------------------------------------------------------------------------
+
+destructor TTaskBarProgress.Destroy;
+begin
+Finalize;
+inherited;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TTaskBarProgress.ReinitHandle(WindowHandle: HWND = 0);
+begin
+fWindowHandle := WindowHandle;
+fHandleObtained := False;
+end;
+
+{$IFDEF ImplicitTaskbarProgress}
+{===============================================================================
+    Standalone functions
+===============================================================================}
 
 var
-  TaskbarList: ITaskbarList4 = nil;
+  ImplicitTaskbarProgress: TTaskBarProgress = nil;
 
 //------------------------------------------------------------------------------
 
 Function TaskbarProgressActive: Boolean;
 begin
-Result := Assigned(TaskbarList);
+If Assigned(ImplicitTaskbarProgress) then
+  Result := ImplicitTaskbarProgress.Active
+else
+  Result := False;
 end;
 
 //------------------------------------------------------------------------------
 
 Function SetTaskbarProgressState(State: TTaskbarProgressState): Boolean;
-var
-  ProgressState:  TBPFLAG;
 begin
-If TaskbarProgressActive then
+If Assigned(ImplicitTaskbarProgress) then
   begin
-    case State of
-      tpsIndeterminate: ProgressState := TBPF_INDETERMINATE;
-      tpsNormal:        ProgressState := TBPF_NORMAL;
-      tpsError:         ProgressState := TBPF_ERROR;
-      tpsPaused:        ProgressState := TBPF_PAUSED;
-    else
-     {tpsNoProgress}
-      ProgressState := TBPF_NOPROGRESS;
-    end;
-  {$IFDEF FPC}
-    {$PUSH}{$WARN SYMBOL_PLATFORM OFF} // for AppHandle
-    Result := Succeeded(TaskbarList.SetProgressState(WidgetSet.AppHandle,ProgressState));
-    {$POP}
-  {$ELSE}
-    Result := Succeeded(TaskbarList.SetProgressState(Application.Handle,ProgressState));
-  {$ENDIF}
+    ImplicitTaskbarProgress.ProgressState := State;
+    Result := Succeeded(ImplicitTaskbarProgress.StateLastResult);
   end
 else Result := False;
 end;
@@ -237,60 +507,36 @@ end;
 
 Function SetTaskbarProgressValue(Completed, Total: UInt64): Boolean;
 begin
-If TaskbarProgressActive then
-{$IFDEF FPC}
-  {$PUSH}{$WARN SYMBOL_PLATFORM OFF}  // for AppHandle
-  Result := Succeeded(TaskbarList.SetProgressValue(WidgetSet.AppHandle,Completed,Total))
-  {$POP}
-{$ELSE}
-  Result := Succeeded(TaskbarList.SetProgressValue(Application.Handle,Completed,Total))
-{$ENDIF}
-else
-  Result := False;
+If Assigned(ImplicitTaskbarProgress) then
+  begin
+    ImplicitTaskbarProgress.ProgressMaxValue := Total;
+    ImplicitTaskbarProgress.ProgressValue := Completed;
+    Result := Succeeded(ImplicitTaskbarProgress.ValueLastResult);
+  end
+else Result := False;
 end;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Function SetTaskbarProgressValue(Value: Double; IntCoef: UInt64 = 1000): Boolean;
 begin
-Result := SetTaskbarProgressValue(UInt64(Trunc(Value * IntCoef)),IntCoef);
-end;
-
-//==============================================================================
-
-procedure Initialize;
-begin
-If Succeeded(CoInitialize(nil)) then
+If Assigned(ImplicitTaskbarProgress) then
   begin
-    If Succeeded(CoCreateInstance(CLSID_TaskbarList,nil,CLSCTX_INPROC_SERVER or CLSCTX_LOCAL_SERVER,IID_ITaskbarList4,TaskbarList)) then
-      begin
-        If TaskbarList.HrInit <> S_OK then
-          begin
-            TaskbarList := nil; // TaskbarList.Relase
-            CoUninitialize;
-          end;
-      end
-    else CoUninitialize;
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure Finalize;
-begin
-If Assigned(TaskbarList) then
-  begin
-    TaskbarList := nil; // TaskbarList.Relase
-    CoUninitialize;
-  end;
+    ImplicitTaskbarProgress.ProgressCoefficient := IntCoef;
+    ImplicitTaskbarProgress.Progress := Value;
+    Result := Succeeded(ImplicitTaskbarProgress.ValueLastResult);
+  end
+else Result := False;
 end;
 
 //------------------------------------------------------------------------------
 
 initialization
-  Initialize;
+  ImplicitTaskbarProgress := TTaskBarProgress.Create;
 
 finalization
-  Finalize;
+  FreeAndNil(ImplicitTaskbarProgress);
+
+{$ENDIF}
 
 end.
