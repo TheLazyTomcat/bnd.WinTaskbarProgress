@@ -55,7 +55,7 @@ unit WinTaskbarProgress;
   When symbol ImplicitTaskbarProgress is defined, this unit creates implicit
   taskbar progress manager object and provides some standalone functions that
   are using it.
-  It is here mainly for situations, whete the standalone manager is not desired,
+  It is here mainly for situations, where the standalone manager is not desired,
   so it can be disabled.
 
   Defined by default.
