@@ -15,9 +15,9 @@
 
   Version 1.1 (2019-10-04)
 
-  Last change 2019-10-04
+  Last change 2020-08-02
 
-  ©2018-2019 František Milt
+  ©2018-2020 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -46,8 +46,9 @@ unit WinTaskbarProgress;
 {$IFEND}
 
 {$IFDEF FPC}
-  {$MODE ObjFPC}{$H+}
+  {$MODE ObjFPC}
 {$ENDIF}
+{$H+}
 
 {
   ImplicitTaskbarProgress
