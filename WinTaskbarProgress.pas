@@ -15,9 +15,9 @@
 
   Version 1.1 (2019-10-04)
 
-  Last change 2020-08-02
+  Last change 2022-06-25
 
-  ©2018-2020 František Milt
+  ©2018-2022 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -60,8 +60,14 @@ unit WinTaskbarProgress;
   so it can be disabled.
 
   Defined by default.
+
+  To disable/undefine this symbol in a project without changing this library,
+  define project-wide symbol WinTaskbarProgress_ImplicitTaskbarProgress_Off.
 }
 {$DEFINE ImplicitTaskbarProgress}
+{$IFDEF WinTaskbarProgress_ImplicitTaskbarProgress_Off}
+  {$UNDEF ImplicitTaskbarProgress}
+{$ENDIF}
 
 {$MINENUMSIZE 4}
 
