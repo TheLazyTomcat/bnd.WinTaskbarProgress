@@ -15,7 +15,7 @@
 
   Version 1.1 (2019-10-04)
 
-  Last change 2022-06-25
+  Last change 2022-09-13
 
   ©2018-2022 František Milt
 
@@ -221,7 +221,7 @@ type
 
 type
   TTaskBarProgress = class(TObject)
-  private
+  protected
     fWindowHandle:    HWND;
     fHandleObtained:  Boolean;
     fTaskbarList:     ITaskbarList4;
@@ -232,14 +232,13 @@ type
     fProgressValue:   UInt64;
     fProgressCoef:    UInt64;
     fProgress:        Double;
-    Function GetActive: Boolean;
-    procedure SetProgressState(Value: TTaskbarProgressState);
-    procedure SetProgressMax(Value: UInt64);
-    procedure SetProgressValue(Value: UInt64);
-    procedure SetProgressCoef(Value: UInt64);
-    procedure SetProgress(Value: Double);
-  protected
     class Function GetWindowHandle: HWND; virtual;
+    Function GetActive: Boolean; virtual;
+    procedure SetProgressState(Value: TTaskbarProgressState); virtual;
+    procedure SetProgressMax(Value: UInt64); virtual;
+    procedure SetProgressValue(Value: UInt64); virtual;
+    procedure SetProgressCoef(Value: UInt64); virtual;
+    procedure SetProgress(Value: Double); virtual;
     procedure ObtainWindowHandle; virtual;
     procedure Initialize; virtual;
     procedure Finalize; virtual;
@@ -281,7 +280,7 @@ uses
     TTaskBarProgress - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TTaskBarProgress - private functions
+    TTaskBarProgress - protected functions
 -------------------------------------------------------------------------------}
 
 Function TTaskBarProgress.GetActive: Boolean;
@@ -352,9 +351,7 @@ fProgressValue := Round(fProgressCoef * fProgress);
 UpdateProgress;
 end;
 
-{-------------------------------------------------------------------------------
-    TTaskBarProgress - protected functions
--------------------------------------------------------------------------------}
+//------------------------------------------------------------------------------
 
 class Function TTaskBarProgress.GetWindowHandle: HWND;
 {$IFNDEF FPC}
